@@ -19,9 +19,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
-          cache: maven
 
-      - name: Extract AutoIllegals project
+      - name: Find AutoIllegals ZIP
         shell: bash
         run: |
           set -e
@@ -29,45 +28,77 @@ jobs:
           ZIP_FILE=$(find . -maxdepth 1 -type f -iname "*.zip" | head -n 1)
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: AutoIllegals ZIP file was not found."
+            echo "ERROR: AutoIllegals project ZIP was not found."
             exit 1
           fi
 
-          echo "Found ZIP: $ZIP_FILE"
+          echo "Found project ZIP:"
+          echo "$ZIP_FILE"
+
+          echo "ZIP contents:"
+          unzip -l "$ZIP_FILE"
 
           rm -rf build-source
-          mkdir build-source
+          mkdir -p build-source
 
           unzip -q "$ZIP_FILE" -d build-source
 
-          echo "Extracted files:"
-          find build-source -maxdepth 3 -type f | head -100
-
-      - name: Find Maven project
+      - name: Locate pom.xml
         shell: bash
         run: |
           set -e
 
-          POM=$(find build-source -type f -name "pom.xml" | head -n 1)
+          echo "Searching for pom.xml..."
+
+          POM=$(find "$GITHUB_WORKSPACE/build-source" \
+            -type f \
+            -name "pom.xml" \
+            -print -quit)
 
           if [ -z "$POM" ]; then
-            echo "ERROR: pom.xml was not found inside the AutoIllegals ZIP."
-            echo "Files found:"
-            find build-source -type f
+            echo "ERROR: pom.xml was not found inside the ZIP."
+            echo ""
+            echo "Extracted files:"
+            find "$GITHUB_WORKSPACE/build-source" -type f
             exit 1
           fi
 
           PROJECT_DIR=$(dirname "$POM")
 
-          echo "Found pom.xml: $POM"
+          echo "Found pom.xml:"
+          echo "$POM"
+
+          echo "Maven project directory:"
+          echo "$PROJECT_DIR"
+
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Build AutoIllegals
         shell: bash
         run: |
           set -e
+
           cd "$PROJECT_DIR"
+
+          echo "Building from:"
+          pwd
+
+          echo "Project files:"
+          ls -la
+
           mvn -B clean package
+
+      - name: Find built JAR
+        shell: bash
+        run: |
+          set -e
+
+          echo "Searching for JAR..."
+
+          find "$PROJECT_DIR/target" \
+            -type f \
+            -name "*.jar" \
+            -print
 
       - name: Upload AutoIllegals JAR
         uses: actions/upload-artifact@v4
